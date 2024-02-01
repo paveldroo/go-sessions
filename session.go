@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/google/uuid"
 	"net/http"
+	"time"
 )
 
 func getUser(w http.ResponseWriter, r *http.Request) User {
@@ -15,8 +16,8 @@ func getUser(w http.ResponseWriter, r *http.Request) User {
 
 	var u User
 
-	if sid, ok := dbSessions[c.Value]; ok {
-		u = dbUsers[sid]
+	if session, ok := dbSessions[c.Value]; ok {
+		u = dbUsers[session.un]
 	}
 	return u
 }
@@ -38,9 +39,18 @@ func hasAccess(r *http.Request) bool {
 	}
 
 	var u User
-	if un, ok := dbSessions[c.Value]; ok {
-		u = dbUsers[un]
+	if session, ok := dbSessions[c.Value]; ok {
+		u = dbUsers[session.un]
 	}
 
 	return u.Role == "007"
+}
+
+func cleanSessions() {
+	for sid, session := range dbSessions {
+		if time.Now().Sub(session.lastActivity) > cleanDelay {
+			delete(dbSessions, sid)
+		}
+	}
+	lastCleaned = time.Now()
 }

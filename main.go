@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"time"
 )
 
 type User struct {
@@ -17,25 +18,22 @@ type User struct {
 	Role     string
 }
 
+type Session struct {
+	un           string
+	lastActivity time.Time
+}
+
 var tpl *template.Template
 
 var dbUsers = make(map[string]User)
-var dbSessions = make(map[string]string)
+var dbSessions = make(map[string]Session)
+var lastCleaned time.Time
+
+const cleanDelay = time.Second * 30
 
 func init() {
 	tpl = template.Must(template.ParseGlob("templates/*"))
-	p, err := bcrypt.GenerateFromPassword([]byte("123"), bcrypt.MinCost)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	nu := User{
-		UserName: "123@123.ru",
-		Password: p,
-		First:    "Yo",
-		Last:     "YOYO",
-		Role:     "user",
-	}
-	dbUsers[nu.UserName] = nu
+	lastCleaned = time.Now()
 }
 
 func main() {
@@ -53,6 +51,7 @@ func index(w http.ResponseWriter, r *http.Request) {
 		tpl.ExecuteTemplate(w, "index.gohtml", nil)
 		return
 	}
+	fmt.Println(dbSessions)
 	u := getUser(w, r)
 	tpl.ExecuteTemplate(w, "index.gohtml", u)
 }
@@ -73,7 +72,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 			}
 			sid := uuid.NewString()
 			http.SetCookie(w, &http.Cookie{Name: "session", Value: sid, HttpOnly: true})
-			dbSessions[sid] = u.UserName
+			dbSessions[sid] = Session{un: u.UserName, lastActivity: time.Now()}
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
@@ -90,6 +89,11 @@ func logout(w http.ResponseWriter, r *http.Request) {
 	c, _ := r.Cookie("session")
 	delete(dbSessions, c.Value)
 	http.SetCookie(w, &http.Cookie{Name: "session", Value: "", MaxAge: -1})
+
+	if time.Now().Sub(lastCleaned) > cleanDelay {
+		go cleanSessions()
+	}
+
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -123,9 +127,8 @@ func signup(w http.ResponseWriter, r *http.Request) {
 			Last:     l,
 			Role:     role,
 		}
-		fmt.Println(string(nu.Password))
 
-		dbSessions[sid] = nu.UserName
+		dbSessions[sid] = Session{un: nu.UserName, lastActivity: time.Now()}
 		dbUsers[nu.UserName] = nu
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
