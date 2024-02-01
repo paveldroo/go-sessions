@@ -14,6 +14,7 @@ type User struct {
 	Password []byte
 	First    string
 	Last     string
+	Role     string
 }
 
 var tpl *template.Template
@@ -32,6 +33,7 @@ func init() {
 		Password: p,
 		First:    "Yo",
 		Last:     "YOYO",
+		Role:     "user",
 	}
 	dbUsers[nu.UserName] = nu
 }
@@ -39,6 +41,7 @@ func init() {
 func main() {
 	http.HandleFunc("/", index)
 	http.HandleFunc("/login", login)
+	http.HandleFunc("/logout", logout)
 	http.HandleFunc("/signup", signup)
 	http.HandleFunc("/bar", bar)
 	http.Handle("/favicon.ico", http.NotFoundHandler())
@@ -80,6 +83,16 @@ func login(w http.ResponseWriter, r *http.Request) {
 	tpl.ExecuteTemplate(w, "login.gohtml", nil)
 }
 
+func logout(w http.ResponseWriter, r *http.Request) {
+	if !alreadyLoggedIn(r) {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	}
+	c, _ := r.Cookie("session")
+	delete(dbSessions, c.Value)
+	http.SetCookie(w, &http.Cookie{Name: "session", Value: "", MaxAge: -1})
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
 func signup(w http.ResponseWriter, r *http.Request) {
 	if alreadyLoggedIn(r) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -90,6 +103,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
 		f := r.FormValue("firstname")
 		l := r.FormValue("lastname")
 		p := r.FormValue("username")
+		role := r.FormValue("role")
 
 		if _, ok := dbUsers[un]; ok {
 			http.Error(w, "Username already taken", http.StatusForbidden)
@@ -107,6 +121,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
 			Password: ep,
 			First:    f,
 			Last:     l,
+			Role:     role,
 		}
 		fmt.Println(string(nu.Password))
 
@@ -123,6 +138,12 @@ func bar(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
+
+	if !hasAccess(r) {
+		http.Redirect(w, r, "/", http.StatusForbidden)
+		return
+	}
+
 	u := getUser(w, r)
 	tpl.ExecuteTemplate(w, "bar.gohtml", u)
 }

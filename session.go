@@ -30,3 +30,17 @@ func alreadyLoggedIn(r *http.Request) bool {
 	_, ok := dbSessions[c.Value]
 	return ok
 }
+
+func hasAccess(r *http.Request) bool {
+	c, err := r.Cookie("session")
+	if errors.Is(err, http.ErrNoCookie) {
+		return false
+	}
+
+	var u User
+	if un, ok := dbSessions[c.Value]; ok {
+		u = dbUsers[un]
+	}
+
+	return u.Role == "007"
+}
