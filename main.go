@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"github.com/google/uuid"
 	"html/template"
 	"log"
@@ -17,7 +16,8 @@ type User struct {
 
 var tpl *template.Template
 
-var users = make(map[string]User)
+var dbUsers = make(map[string]User)
+var dbSessions = make(map[string]string)
 
 func init() {
 	tpl = template.Must(template.ParseGlob("templates/*"))
@@ -38,8 +38,10 @@ func index(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u := users[c.Value]
-	fmt.Println(users)
+	var u User
+	if un, ok := dbSessions[c.Value]; ok {
+		u = dbUsers[un]
+	}
 	tpl.ExecuteTemplate(w, "index.gohtml", u)
 }
 
@@ -52,9 +54,8 @@ func signup(w http.ResponseWriter, r *http.Request) {
 			First:    r.FormValue("firstname"),
 			Last:     r.FormValue("lastname"),
 		}
-
-		users[sid] = nu
-		fmt.Println(users)
+		dbSessions[sid] = nu.UserName
+		dbUsers[nu.UserName] = nu
 	}
 	tpl.ExecuteTemplate(w, "signup.gohtml", nil)
 }
@@ -66,7 +67,9 @@ func bar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u := users[c.Value]
-	fmt.Println(users)
+	var u User
+	if un, ok := dbSessions[c.Value]; ok {
+		u = dbUsers[un]
+	}
 	tpl.ExecuteTemplate(w, "bar.gohtml", u)
 }
