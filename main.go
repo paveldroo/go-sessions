@@ -41,15 +41,27 @@ func index(w http.ResponseWriter, r *http.Request) {
 
 func signup(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
+		un := r.FormValue("username")
+		f := r.FormValue("firstname")
+		l := r.FormValue("lastname")
+
+		if _, ok := dbUsers[un]; ok {
+			http.Error(w, "Username already taken", http.StatusForbidden)
+			return
+		}
+
 		sid := uuid.NewString()
 		http.SetCookie(w, &http.Cookie{Name: "session", Value: sid, HttpOnly: true})
 		nu := User{
-			UserName: r.FormValue("username"),
-			First:    r.FormValue("firstname"),
-			Last:     r.FormValue("lastname"),
+			UserName: un,
+			First:    f,
+			Last:     l,
 		}
+
 		dbSessions[sid] = nu.UserName
 		dbUsers[nu.UserName] = nu
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
 	}
 	tpl.ExecuteTemplate(w, "signup.gohtml", nil)
 }
