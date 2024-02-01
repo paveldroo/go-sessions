@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 	"html/template"
 	"log"
 	"net/http"
@@ -9,6 +11,7 @@ import (
 
 type User struct {
 	UserName string
+	Password []byte
 	First    string
 	Last     string
 }
@@ -48,6 +51,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
 		un := r.FormValue("username")
 		f := r.FormValue("firstname")
 		l := r.FormValue("lastname")
+		p := r.FormValue("username")
 
 		if _, ok := dbUsers[un]; ok {
 			http.Error(w, "Username already taken", http.StatusForbidden)
@@ -56,11 +60,17 @@ func signup(w http.ResponseWriter, r *http.Request) {
 
 		sid := uuid.NewString()
 		http.SetCookie(w, &http.Cookie{Name: "session", Value: sid, HttpOnly: true})
+		ep, err := bcrypt.GenerateFromPassword([]byte(p), 0)
+		if err != nil {
+			http.Error(w, "There was an error with user data", http.StatusInternalServerError)
+		}
 		nu := User{
 			UserName: un,
+			Password: ep,
 			First:    f,
 			Last:     l,
 		}
+		fmt.Println(string(nu.Password))
 
 		dbSessions[sid] = nu.UserName
 		dbUsers[nu.UserName] = nu
