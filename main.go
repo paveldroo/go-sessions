@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"github.com/google/uuid"
 	"html/template"
 	"log"
@@ -32,16 +31,11 @@ func main() {
 }
 
 func index(w http.ResponseWriter, r *http.Request) {
-	c, err := r.Cookie("session")
-	if errors.Is(err, http.ErrNoCookie) {
+	if !alreadyLoggedIn(r) {
 		tpl.ExecuteTemplate(w, "index.gohtml", nil)
 		return
 	}
-
-	var u User
-	if un, ok := dbSessions[c.Value]; ok {
-		u = dbUsers[un]
-	}
+	u := getUser(w, r)
 	tpl.ExecuteTemplate(w, "index.gohtml", u)
 }
 
@@ -61,15 +55,10 @@ func signup(w http.ResponseWriter, r *http.Request) {
 }
 
 func bar(w http.ResponseWriter, r *http.Request) {
-	c, err := r.Cookie("session")
-	if errors.Is(err, http.ErrNoCookie) {
+	if !alreadyLoggedIn(r) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-
-	var u User
-	if un, ok := dbSessions[c.Value]; ok {
-		u = dbUsers[un]
-	}
+	u := getUser(w, r)
 	tpl.ExecuteTemplate(w, "bar.gohtml", u)
 }
