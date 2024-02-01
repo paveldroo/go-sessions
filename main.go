@@ -23,10 +23,22 @@ var dbSessions = make(map[string]string)
 
 func init() {
 	tpl = template.Must(template.ParseGlob("templates/*"))
+	p, err := bcrypt.GenerateFromPassword([]byte("123"), bcrypt.MinCost)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	nu := User{
+		UserName: "123@123.ru",
+		Password: p,
+		First:    "Yo",
+		Last:     "YOYO",
+	}
+	dbUsers[nu.UserName] = nu
 }
 
 func main() {
 	http.HandleFunc("/", index)
+	http.HandleFunc("/login", login)
 	http.HandleFunc("/signup", signup)
 	http.HandleFunc("/bar", bar)
 	http.Handle("/favicon.ico", http.NotFoundHandler())
@@ -40,6 +52,32 @@ func index(w http.ResponseWriter, r *http.Request) {
 	}
 	u := getUser(w, r)
 	tpl.ExecuteTemplate(w, "index.gohtml", u)
+}
+
+func login(w http.ResponseWriter, r *http.Request) {
+	if alreadyLoggedIn(r) {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	if r.Method == http.MethodPost {
+		un := r.FormValue("username")
+		p := r.FormValue("password")
+		if u, ok := dbUsers[un]; ok {
+			err := bcrypt.CompareHashAndPassword(u.Password, []byte(p))
+			if err != nil {
+				http.Error(w, "Incorrect login or password", http.StatusForbidden)
+				return
+			}
+			sid := uuid.NewString()
+			http.SetCookie(w, &http.Cookie{Name: "session", Value: sid, HttpOnly: true})
+			dbSessions[sid] = u.UserName
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
+		http.Error(w, "Incorrect login or password", http.StatusForbidden)
+		return
+	}
+	tpl.ExecuteTemplate(w, "login.gohtml", nil)
 }
 
 func signup(w http.ResponseWriter, r *http.Request) {
@@ -60,7 +98,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
 
 		sid := uuid.NewString()
 		http.SetCookie(w, &http.Cookie{Name: "session", Value: sid, HttpOnly: true})
-		ep, err := bcrypt.GenerateFromPassword([]byte(p), 0)
+		ep, err := bcrypt.GenerateFromPassword([]byte(p), bcrypt.MinCost)
 		if err != nil {
 			http.Error(w, "There was an error with user data", http.StatusInternalServerError)
 		}
